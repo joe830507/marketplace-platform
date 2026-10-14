@@ -1,0 +1,1860 @@
+openapi: 3.1.0
+info:
+  title: Marketplace Platform API
+  version: 1.0.0
+  description: |
+    多賣家電商平台的 API，第一版範圍。
+    設計慣例見《設計_005_API規格》。
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: public
+    description: 不需要登入
+  - name: member-auth
+    description: 會員認證
+  - name: member
+    description: 會員
+  - name: seller-auth
+    description: 賣家帳號認證
+  - name: seller
+    description: 賣家
+  - name: ops-auth
+    description: 營運帳號認證
+  - name: ops
+    description: 平台營運
+  - name: webhook
+    description: 模擬金流的回呼
+
+paths:
+  # ---------------------------------------------------------------- public
+  /api/v1/public/rules:
+    get:
+      tags: [public]
+      operationId: getRules
+      security: []
+      summary: 規則告知用的設定值
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rules" }
+
+  /api/v1/public/categories:
+    get:
+      tags: [public]
+      operationId: listCategories
+      security: []
+      summary: 分類清單
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Category" }
+
+  /api/v1/public/products:
+    get:
+      tags: [public]
+      operationId: searchProducts
+      security: []
+      summary: 分類瀏覽與關鍵字搜尋
+      description: 只回傳上架中的商品。最深只能取得第 1,000 筆結果。
+      parameters:
+        - name: categoryId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: keyword
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: minPrice
+          in: query
+          schema: { $ref: "#/components/schemas/Amount" }
+        - name: maxPrice
+          in: query
+          schema: { $ref: "#/components/schemas/Amount" }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [NEWEST, PRICE_ASC, PRICE_DESC]
+            default: NEWEST
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductSummaryPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/v1/public/products/{productId}:
+    get:
+      tags: [public]
+      operationId: getProduct
+      security: []
+      summary: 商品頁
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/public/terms/{documentType}/latest:
+    get:
+      tags: [public]
+      operationId: getLatestTerms
+      security: []
+      summary: 最新版本的條款
+      parameters:
+        - name: documentType
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/TermsDocumentType" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TermsDocument" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- member auth
+  /api/v1/member/auth/register:
+    post:
+      tags: [member-auth]
+      operationId: registerMember
+      security: []
+      summary: 會員註冊
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterMemberRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/member/auth/login:
+    post:
+      tags: [member-auth]
+      operationId: loginMember
+      security: []
+      summary: 會員登入
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/TokenIssued" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/member/auth/refresh:
+    post:
+      tags: [member-auth]
+      operationId: refreshMemberToken
+      summary: 換發存取權杖
+      security:
+        - refreshTokenCookie: []
+      responses:
+        "200": { $ref: "#/components/responses/TokenIssued" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/member/auth/logout:
+    post:
+      tags: [member-auth]
+      operationId: logoutMember
+      summary: 登出
+      security:
+        - refreshTokenCookie: []
+      responses:
+        "204": { $ref: "#/components/responses/LoggedOut" }
+
+  /api/v1/member/auth/password:
+    post:
+      tags: [member-auth]
+      operationId: changeMemberPassword
+      summary: 修改密碼
+      description: 成功後撤銷該帳號所有更新權杖，須重新登入。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/LoggedOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ---------------------------------------------------------------- member
+  /api/v1/member/terms-consents:
+    post:
+      tags: [member]
+      operationId: consentMemberTerms
+      summary: 同意新版本的條款
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TermsConsentRequest" }
+      responses:
+        "204":
+          description: No Content
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/member/shipping-addresses:
+    get:
+      tags: [member]
+      operationId: listShippingAddresses
+      summary: 收件資訊清單
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ShippingAddress" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [member]
+      operationId: createShippingAddress
+      summary: 新增收件資訊
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShippingAddressRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingAddress" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/member/shipping-addresses/{addressId}:
+    parameters:
+      - name: addressId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [member]
+      operationId: updateShippingAddress
+      summary: 修改收件資訊
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShippingAddressRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShippingAddress" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [member]
+      operationId: deleteShippingAddress
+      summary: 刪除收件資訊
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/member/cart:
+    get:
+      tags: [member]
+      operationId: getCart
+      summary: 購物車
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cart" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/member/cart/items/{productId}:
+    parameters:
+      - $ref: "#/components/parameters/ProductId"
+    put:
+      tags: [member]
+      operationId: putCartItem
+      summary: 加入購物車或修改數量
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CartItemRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cart" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [member]
+      operationId: deleteCartItem
+      summary: 從購物車移除
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/member/checkouts:
+    get:
+      tags: [member]
+      operationId: listMemberCheckouts
+      summary: 我的訂單列表
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/CheckoutStatus" }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckoutSummaryPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [member]
+      operationId: createCheckout
+      summary: 結帳
+      description: 結帳購物車中指定的商品，依賣家拆成子訂單並預扣庫存。
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCheckoutRequest" }
+      responses:
+        "200":
+          description: 相同冪等鍵的重複請求，回傳第一次建立的結帳單
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Checkout" }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Checkout" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/member/checkouts/{checkoutId}:
+    get:
+      tags: [member]
+      operationId: getMemberCheckout
+      summary: 訂單詳情
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Checkout" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/member/checkouts/{checkoutId}/cancel:
+    post:
+      tags: [member]
+      operationId: cancelCheckout
+      summary: 主動取消結帳單
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Checkout" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/member/checkouts/{checkoutId}/payments:
+    post:
+      tags: [member]
+      operationId: createPayment
+      summary: 發起付款
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
+      responses:
+        "200":
+          description: 相同冪等鍵的重複請求，回傳第一次的付款
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Payment" }
+        "201":
+          description: Created；狀態可能為成功、失敗或處理中
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Payment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/member/checkouts/{checkoutId}/payments/latest:
+    get:
+      tags: [member]
+      operationId: getLatestPayment
+      summary: 查詢最新一筆付款的結果
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Payment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- seller auth
+  /api/v1/seller/auth/login:
+    post:
+      tags: [seller-auth]
+      operationId: loginSellerUser
+      security: []
+      summary: 賣家帳號登入
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/TokenIssued" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/seller/auth/refresh:
+    post:
+      tags: [seller-auth]
+      operationId: refreshSellerUserToken
+      summary: 換發存取權杖
+      security:
+        - refreshTokenCookie: []
+      responses:
+        "200": { $ref: "#/components/responses/TokenIssued" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/seller/auth/logout:
+    post:
+      tags: [seller-auth]
+      operationId: logoutSellerUser
+      summary: 登出
+      security:
+        - refreshTokenCookie: []
+      responses:
+        "204": { $ref: "#/components/responses/LoggedOut" }
+
+  /api/v1/seller/auth/password:
+    post:
+      tags: [seller-auth]
+      operationId: changeSellerUserPassword
+      summary: 修改密碼
+      description: 成功後撤銷該帳號所有更新權杖，須重新登入。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/LoggedOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ---------------------------------------------------------------- seller
+  /api/v1/seller/terms-consents:
+    post:
+      tags: [seller]
+      operationId: consentSellerTerms
+      summary: 同意賣家條款（管理者）
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TermsConsentRequest" }
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/seller/products:
+    get:
+      tags: [seller]
+      operationId: listSellerProducts
+      summary: 賣家的商品列表
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/ProductStatus" }
+        - name: keyword
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerProductPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [seller]
+      operationId: createSellerProduct
+      summary: 新增商品（建立時為下架狀態）
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerProduct" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/seller/products/{productId}:
+    parameters:
+      - $ref: "#/components/parameters/ProductId"
+    get:
+      tags: [seller]
+      operationId: getSellerProduct
+      summary: 商品詳情
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerProduct" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [seller]
+      operationId: updateSellerProduct
+      summary: 修改商品
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerProduct" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/seller/products/{productId}/list:
+    post:
+      tags: [seller]
+      operationId: listProduct
+      summary: 上架
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerProduct" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/seller/products/{productId}/unlist:
+    post:
+      tags: [seller]
+      operationId: unlistProduct
+      summary: 下架
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerProduct" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/seller/products/{productId}/stock:
+    get:
+      tags: [seller]
+      operationId: getStock
+      summary: 庫存數字
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stock" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/seller/products/{productId}/stock/movements:
+    get:
+      tags: [seller]
+      operationId: listStockMovements
+      summary: 庫存異動紀錄
+      description: 未指定日期區間時查詢最近 30 天，區間最長 1 年。
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+        - name: movementType
+          in: query
+          schema: { $ref: "#/components/schemas/StockMovementType" }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockMovementPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/seller/products/{productId}/stock/inbound:
+    post:
+      tags: [seller]
+      operationId: inboundStock
+      summary: 入庫
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockInboundRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stock" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/seller/products/{productId}/stock/adjustments:
+    post:
+      tags: [seller]
+      operationId: adjustStock
+      summary: 調整庫存
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockAdjustmentRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stock" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/seller/orders:
+    get:
+      tags: [seller]
+      operationId: listSellerOrders
+      summary: 子訂單列表
+      description: 未指定日期區間時查詢最近 30 天，區間最長 1 年。
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/SellerOrderStatus" }
+        - name: orderNumber
+          in: query
+          schema: { type: string }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerOrderPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/seller/orders/{sellerOrderId}:
+    get:
+      tags: [seller]
+      operationId: getSellerOrder
+      summary: 子訂單詳情
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sellerOrderId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerOrderForSeller" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- ops auth
+  /api/v1/ops/auth/login:
+    post:
+      tags: [ops-auth]
+      operationId: loginOperator
+      security: []
+      summary: 營運帳號登入
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/TokenIssued" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/ops/auth/refresh:
+    post:
+      tags: [ops-auth]
+      operationId: refreshOperatorToken
+      summary: 換發存取權杖
+      security:
+        - refreshTokenCookie: []
+      responses:
+        "200": { $ref: "#/components/responses/TokenIssued" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/ops/auth/logout:
+    post:
+      tags: [ops-auth]
+      operationId: logoutOperator
+      summary: 登出
+      security:
+        - refreshTokenCookie: []
+      responses:
+        "204": { $ref: "#/components/responses/LoggedOut" }
+
+  /api/v1/ops/auth/password:
+    post:
+      tags: [ops-auth]
+      operationId: changeOperatorPassword
+      summary: 修改密碼
+      description: 成功後撤銷該帳號所有更新權杖，須重新登入。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/LoggedOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ---------------------------------------------------------------- ops
+  /api/v1/ops/sellers:
+    get:
+      tags: [ops]
+      operationId: listSellers
+      summary: 賣家列表
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: keyword
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [ops]
+      operationId: createSeller
+      summary: 建立賣家與其第一個管理者帳號（營運管理者）
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSellerRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Seller" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/ops/sellers/{sellerId}:
+    get:
+      tags: [ops]
+      operationId: getSeller
+      summary: 賣家詳情
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SellerId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Seller" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/ops/sellers/{sellerId}/commission-rate:
+    put:
+      tags: [ops]
+      operationId: setCommissionRate
+      summary: 設定抽成比例（營運管理者）
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SellerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommissionRateRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Seller" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /api/v1/ops/categories:
+    post:
+      tags: [ops]
+      operationId: createCategory
+      summary: 新增分類（營運管理者）
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/ops/terms-documents:
+    post:
+      tags: [ops]
+      operationId: publishTermsDocument
+      summary: 發布條款新版本（營運管理者）
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublishTermsRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TermsDocument" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/ops/operator-users:
+    get:
+      tags: [ops]
+      operationId: listOperatorUsers
+      summary: 營運帳號列表（營運管理者）
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorUserPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [ops]
+      operationId: createOperatorUser
+      summary: 新增營運帳號（營運管理者）
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateOperatorUserRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorUser" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/ops/operator-users/{operatorUserId}/roles:
+    put:
+      tags: [ops]
+      operationId: setOperatorRoles
+      summary: 設定營運帳號的角色（營運管理者）
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: operatorUserId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatorRolesRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorUser" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/ops/checkouts:
+    get:
+      tags: [ops]
+      operationId: searchCheckouts
+      summary: 以結帳單編號或會員查詢
+      description: 依會員查詢時，未指定日期區間則查詢最近 30 天，區間最長 1 年。
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: checkoutNumber
+          in: query
+          schema: { type: string }
+        - name: memberId
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckoutSummaryPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/ops/checkouts/{checkoutId}:
+    get:
+      tags: [ops]
+      operationId: getOpsCheckout
+      summary: 結帳單完整詳情
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpsCheckout" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- webhook
+  /api/v1/webhooks/payment-gateway:
+    post:
+      tags: [webhook]
+      operationId: receivePaymentGatewayEvent
+      summary: 接收模擬金流的付款結果通知
+      security:
+        - gatewaySignature: []
+      parameters:
+        - name: X-Gateway-Timestamp
+          in: header
+          required: true
+          schema: { type: integer, format: int64 }
+          description: 送出時間，Unix 秒數
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GatewayEvent" }
+      responses:
+        "200":
+          description: 已處理，或先前已處理過
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshTokenCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+    gatewaySignature:
+      type: apiKey
+      in: header
+      name: X-Gateway-Signature
+      description: 對「時間戳記 + `.` + 請求內容」計算的 HMAC-SHA256，十六進位表示
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Size:
+      name: size
+      in: query
+      schema: { type: integer, enum: [20, 50, 100], default: 20 }
+    From:
+      name: from
+      in: query
+      description: 起始日期（含），以台灣日期解讀
+      schema: { type: string, format: date }
+    To:
+      name: to
+      in: query
+      description: 結束日期（含），以台灣日期解讀
+      schema: { type: string, format: date }
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CheckoutId:
+      name: checkoutId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SellerId:
+      name: sellerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    TokenIssued:
+      description: 回應存取權杖；更新權杖以 HttpOnly Cookie 設定
+      headers:
+        Set-Cookie:
+          schema: { type: string }
+          description: refresh_token；HttpOnly、Secure、SameSite=Strict
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/AccessToken" }
+    LoggedOut:
+      description: 已登出，並清除更新權杖的 Cookie
+      headers:
+        Set-Cookie:
+          schema: { type: string }
+    BadRequest:
+      description: 請求格式或欄位驗證錯誤
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: 未登入、權杖無效、帳號或密碼錯誤、帳號鎖定
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: 沒有權限、須先同意最新條款，或須先修改初始密碼
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: 資源不存在或不屬於呼叫者
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Conflict:
+      description: 與目前狀態衝突
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    UnprocessableEntity:
+      description: 違反業務規則
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    TooManyRequests:
+      description: 超過請求頻率上限
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: 建議等待的秒數
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    # ------------------------------------------------------------ common
+    Amount:
+      type: integer
+      format: int64
+      minimum: 0
+      description: 新臺幣整數元
+    Rate:
+      type: integer
+      minimum: 0
+      maximum: 10000
+      description: 萬分之一為單位，例如 1000 為 10%
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code:
+          type: string
+          description: 平台的錯誤代碼，見《設計_005_API規格》2.4
+        traceId: { type: string }
+        lockedUntil:
+          type: string
+          format: date-time
+          description: 只在 ACCOUNT_LOCKED 時出現
+        errors:
+          type: array
+          items:
+            type: object
+            required: [message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+    PageMeta:
+      type: object
+      required: [page, size, totalItems, totalItemsCapped, totalPages]
+      properties:
+        page: { type: integer }
+        size: { type: integer }
+        totalItems: { type: integer }
+        totalItemsCapped:
+          type: boolean
+          description: 為 true 時，實際筆數超過上限，totalItems 只計算到上限
+        totalPages: { type: integer }
+    Rules:
+      type: object
+      required:
+        - paymentTimeoutMinutes
+        - flashSalePaymentTimeoutMinutes
+        - maxQuantityPerItem
+        - lowStockThreshold
+        - autoReceiveDays
+        - autoCompleteDays
+        - refundReviewDays
+        - appealDays
+      properties:
+        paymentTimeoutMinutes: { type: integer }
+        flashSalePaymentTimeoutMinutes: { type: integer }
+        maxQuantityPerItem: { type: integer }
+        lowStockThreshold: { type: integer }
+        autoReceiveDays: { type: integer }
+        autoCompleteDays: { type: integer }
+        refundReviewDays: { type: integer }
+        appealDays: { type: integer }
+
+    # ------------------------------------------------------------ auth & account
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 50 }
+        password: { type: string, minLength: 1, maxLength: 100 }
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 100 }
+        newPassword: { type: string, minLength: 8, maxLength: 100 }
+    AccessToken:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken: { type: string }
+        tokenType:
+          type: string
+          enum: [Bearer]
+        expiresIn:
+          type: integer
+          description: 有效秒數
+    RegisterMemberRequest:
+      type: object
+      required: [username, password, displayName, consentedTermsDocumentIds]
+      properties:
+        username: { type: string, minLength: 4, maxLength: 50 }
+        password: { type: string, minLength: 8, maxLength: 100 }
+        displayName: { type: string, minLength: 1, maxLength: 50 }
+        consentedTermsDocumentIds:
+          type: array
+          description: 須包含最新版本的服務條款與隱私權政策
+          minItems: 2
+          items: { type: string, format: uuid }
+    Member:
+      type: object
+      required: [id, username, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        displayName: { type: string }
+    TermsDocumentType:
+      type: string
+      enum: [TERMS_OF_SERVICE, PRIVACY_POLICY, SELLER_TERMS]
+    TermsDocument:
+      type: object
+      required: [id, documentType, version, content, publishedAt]
+      properties:
+        id: { type: string, format: uuid }
+        documentType: { $ref: "#/components/schemas/TermsDocumentType" }
+        version: { type: integer }
+        content: { type: string }
+        publishedAt: { type: string, format: date-time }
+    TermsConsentRequest:
+      type: object
+      required: [termsDocumentId]
+      properties:
+        termsDocumentId: { type: string, format: uuid }
+    PublishTermsRequest:
+      type: object
+      required: [documentType, content]
+      properties:
+        documentType: { $ref: "#/components/schemas/TermsDocumentType" }
+        content: { type: string, minLength: 1 }
+    ShippingAddressRequest:
+      type: object
+      required: [recipientName, phone, address, isDefault]
+      properties:
+        recipientName: { type: string, minLength: 1, maxLength: 50 }
+        phone: { type: string, minLength: 1, maxLength: 20 }
+        address: { type: string, minLength: 1, maxLength: 200 }
+        isDefault: { type: boolean }
+    ShippingAddress:
+      allOf:
+        - $ref: "#/components/schemas/ShippingAddressRequest"
+        - type: object
+          required: [id]
+          properties:
+            id: { type: string, format: uuid }
+    Recipient:
+      type: object
+      required: [name, phone, address]
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        address: { type: string }
+
+    # ------------------------------------------------------------ catalog
+    Category:
+      type: object
+      required: [id, name, sortOrder]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        parentId: { type: string, format: uuid }
+        sortOrder: { type: integer }
+    CategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 50 }
+        parentId: { type: string, format: uuid }
+        sortOrder: { type: integer, default: 0 }
+    ProductStatus:
+      type: string
+      enum: [LISTED, UNLISTED]
+    StockStatus:
+      type: string
+      enum: [IN_STOCK, LOW_STOCK, SOLD_OUT]
+      description: 有貨、即將售完、已售完；不顯示確切數量
+    ProductSummary:
+      type: object
+      required: [id, name, price, sellerId, stockStatus]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        price: { $ref: "#/components/schemas/Amount" }
+        sellerId: { type: string, format: uuid }
+        categoryId: { type: string, format: uuid }
+        stockStatus: { $ref: "#/components/schemas/StockStatus" }
+    ProductDetail:
+      allOf:
+        - $ref: "#/components/schemas/ProductSummary"
+        - type: object
+          properties:
+            description: { type: string }
+    ProductSummaryPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProductSummary" }
+        page: { $ref: "#/components/schemas/PageMeta" }
+    ProductRequest:
+      type: object
+      required: [categoryId, name, price]
+      properties:
+        categoryId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 5000 }
+        price:
+          type: integer
+          format: int64
+          minimum: 1
+    SellerProduct:
+      type: object
+      required: [id, categoryId, name, price, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        categoryId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        price: { $ref: "#/components/schemas/Amount" }
+        status: { $ref: "#/components/schemas/ProductStatus" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SellerProductPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SellerProduct" }
+        page: { $ref: "#/components/schemas/PageMeta" }
+
+    # ------------------------------------------------------------ inventory
+    Stock:
+      type: object
+      required: [productId, available, reserved]
+      properties:
+        productId: { type: string, format: uuid }
+        available: { type: integer, minimum: 0 }
+        reserved: { type: integer, minimum: 0 }
+    StockMovementType:
+      type: string
+      enum: [INBOUND, ADJUST, RESERVE, CONFIRM, RELEASE, REFUND_RESTOCK]
+    StockMovement:
+      type: object
+      required: [id, movementType, availableDelta, reservedDelta, createdAt, createdBy]
+      properties:
+        id: { type: string, format: uuid }
+        movementType: { $ref: "#/components/schemas/StockMovementType" }
+        availableDelta: { type: integer }
+        reservedDelta: { type: integer }
+        referenceType: { type: string }
+        referenceId: { type: string, format: uuid }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string }
+    StockMovementPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StockMovement" }
+        page: { $ref: "#/components/schemas/PageMeta" }
+    StockInboundRequest:
+      type: object
+      required: [quantity, reason]
+      properties:
+        quantity: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 200 }
+    StockAdjustmentRequest:
+      type: object
+      required: [delta, reason]
+      properties:
+        delta:
+          type: integer
+          description: 可賣數量的增減，不可為 0；調整後不可小於 0
+        reason: { type: string, minLength: 1, maxLength: 200 }
+
+    # ------------------------------------------------------------ cart
+    CartItemRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: { type: integer, minimum: 1, maximum: 99 }
+    CartItem:
+      type: object
+      required: [productId, productName, quantity, currentPrice, stockStatus, listed]
+      properties:
+        productId: { type: string, format: uuid }
+        productName: { type: string }
+        quantity: { type: integer }
+        currentPrice: { $ref: "#/components/schemas/Amount" }
+        stockStatus: { $ref: "#/components/schemas/StockStatus" }
+        listed:
+          type: boolean
+          description: false 表示商品已下架，無法結帳
+    Cart:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CartItem" }
+
+    # ------------------------------------------------------------ ordering
+    CheckoutType:
+      type: string
+      enum: [REGULAR, FLASH_SALE]
+    CheckoutStatus:
+      type: string
+      enum: [PENDING_PAYMENT, PAID, CANCELLED]
+    SellerOrderStatus:
+      type: string
+      enum: [PENDING_PAYMENT, PAID, SHIPPED, RECEIVED, COMPLETED, REFUND_PENDING, REFUNDED, CANCELLED]
+    CreateCheckoutRequest:
+      type: object
+      required: [productIds, shippingAddressId]
+      properties:
+        productIds:
+          type: array
+          description: 要結帳的購物車商品；數量以購物車中的數量為準
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        shippingAddressId: { type: string, format: uuid }
+    OrderItem:
+      type: object
+      required: [productId, productName, unitPrice, quantity, lineAmount]
+      properties:
+        productId: { type: string, format: uuid }
+        productName: { type: string }
+        unitPrice: { $ref: "#/components/schemas/Amount" }
+        quantity: { type: integer }
+        lineAmount: { $ref: "#/components/schemas/Amount" }
+    SellerOrderForMember:
+      type: object
+      required: [id, orderNumber, sellerId, status, originalAmount, discountAllocation, paidAmount, items]
+      properties:
+        id: { type: string, format: uuid }
+        orderNumber: { type: string }
+        sellerId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/SellerOrderStatus" }
+        originalAmount: { $ref: "#/components/schemas/Amount" }
+        discountAllocation: { $ref: "#/components/schemas/Amount" }
+        paidAmount: { $ref: "#/components/schemas/Amount" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderItem" }
+    StatusChange:
+      type: object
+      required: [toStatus, changedAt]
+      properties:
+        fromStatus: { type: string }
+        toStatus: { type: string }
+        reason: { type: string }
+        changedAt: { type: string, format: date-time }
+    Checkout:
+      type: object
+      required:
+        - id
+        - checkoutNumber
+        - checkoutType
+        - status
+        - totalAmount
+        - discountAmount
+        - payableAmount
+        - paymentDeadline
+        - recipient
+        - sellerOrders
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        checkoutNumber: { type: string }
+        checkoutType: { $ref: "#/components/schemas/CheckoutType" }
+        status: { $ref: "#/components/schemas/CheckoutStatus" }
+        totalAmount: { $ref: "#/components/schemas/Amount" }
+        discountAmount: { $ref: "#/components/schemas/Amount" }
+        payableAmount: { $ref: "#/components/schemas/Amount" }
+        paymentDeadline: { type: string, format: date-time }
+        recipient: { $ref: "#/components/schemas/Recipient" }
+        sellerOrders:
+          type: array
+          items: { $ref: "#/components/schemas/SellerOrderForMember" }
+        statusHistory:
+          type: array
+          items: { $ref: "#/components/schemas/StatusChange" }
+        paidAt: { type: string, format: date-time }
+        cancelledAt: { type: string, format: date-time }
+        cancelReason:
+          type: string
+          enum: [TIMEOUT, MEMBER]
+        createdAt: { type: string, format: date-time }
+    OpsCheckout:
+      allOf:
+        - $ref: "#/components/schemas/Checkout"
+        - type: object
+          required: [memberId, payments]
+          properties:
+            memberId: { type: string, format: uuid }
+            payments:
+              type: array
+              items: { $ref: "#/components/schemas/Payment" }
+    CheckoutSummary:
+      type: object
+      required: [id, checkoutNumber, status, payableAmount, sellerOrderStatuses, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        checkoutNumber: { type: string }
+        status: { $ref: "#/components/schemas/CheckoutStatus" }
+        payableAmount: { $ref: "#/components/schemas/Amount" }
+        sellerOrderStatuses:
+          type: array
+          items: { $ref: "#/components/schemas/SellerOrderStatus" }
+        paymentDeadline: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    CheckoutSummaryPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CheckoutSummary" }
+        page: { $ref: "#/components/schemas/PageMeta" }
+    SellerOrderForSeller:
+      type: object
+      required:
+        - id
+        - orderNumber
+        - status
+        - originalAmount
+        - commissionRate
+        - items
+        - recipient
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        orderNumber: { type: string }
+        status: { $ref: "#/components/schemas/SellerOrderStatus" }
+        originalAmount:
+          $ref: "#/components/schemas/Amount"
+        commissionRate: { $ref: "#/components/schemas/Rate" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderItem" }
+        recipient: { $ref: "#/components/schemas/Recipient" }
+        statusHistory:
+          type: array
+          items: { $ref: "#/components/schemas/StatusChange" }
+        paidAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    SellerOrderPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SellerOrderForSeller" }
+        page: { $ref: "#/components/schemas/PageMeta" }
+
+    # ------------------------------------------------------------ payment
+    CreatePaymentRequest:
+      type: object
+      required: [paymentToken]
+      properties:
+        paymentToken:
+          type: string
+          description: 模擬金流的測試用付款代碼，例如 tok_success
+    PaymentStatus:
+      type: string
+      enum: [PROCESSING, SUCCEEDED, FAILED]
+    Payment:
+      type: object
+      required: [id, checkoutId, amount, status, requestedAt]
+      properties:
+        id: { type: string, format: uuid }
+        checkoutId: { type: string, format: uuid }
+        amount: { $ref: "#/components/schemas/Amount" }
+        status: { $ref: "#/components/schemas/PaymentStatus" }
+        failureReason: { type: string }
+        requestedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+    GatewayEvent:
+      type: object
+      required: [eventId, eventType, merchantReference, transactionId, amount, occurredAt]
+      properties:
+        eventId: { type: string, format: uuid }
+        eventType:
+          type: string
+          enum: [PAYMENT_SUCCEEDED, PAYMENT_FAILED]
+        merchantReference:
+          type: string
+          format: uuid
+          description: 平台的付款識別碼
+        transactionId: { type: string, format: uuid }
+        amount: { $ref: "#/components/schemas/Amount" }
+        failureReason: { type: string }
+        occurredAt: { type: string, format: date-time }
+
+    # ------------------------------------------------------------ ops
+    SellerType:
+      type: string
+      enum: [FIRST_PARTY, THIRD_PARTY]
+    CreateSellerRequest:
+      type: object
+      required: [name, sellerType, adminUsername, adminInitialPassword]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        sellerType: { $ref: "#/components/schemas/SellerType" }
+        adminUsername: { type: string, minLength: 4, maxLength: 50 }
+        adminInitialPassword: { type: string, minLength: 8, maxLength: 100 }
+        commissionRate:
+          $ref: "#/components/schemas/Rate"
+          description: 外部賣家必填；平台自營賣家不可填
+    Seller:
+      type: object
+      required: [id, name, sellerType, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        sellerType: { $ref: "#/components/schemas/SellerType" }
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+        commissionRate: { $ref: "#/components/schemas/Rate" }
+    SellerPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Seller" }
+        page: { $ref: "#/components/schemas/PageMeta" }
+    CommissionRateRequest:
+      type: object
+      required: [rate]
+      properties:
+        rate: { $ref: "#/components/schemas/Rate" }
+    OperatorRole:
+      type: string
+      enum: [ADMIN, CAMPAIGN, CUSTOMER_SERVICE, FINANCE]
+    OperatorUser:
+      type: object
+      required: [id, username, status, roles]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/OperatorRole" }
+    OperatorUserPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OperatorUser" }
+        page: { $ref: "#/components/schemas/PageMeta" }
+    CreateOperatorUserRequest:
+      type: object
+      required: [username, initialPassword, roles]
+      properties:
+        username: { type: string, minLength: 4, maxLength: 50 }
+        initialPassword: { type: string, minLength: 8, maxLength: 100 }
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/OperatorRole" }
+    OperatorRolesRequest:
+      type: object
+      required: [roles]
+      properties:
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/OperatorRole" }

@@ -1,0 +1,158 @@
+openapi: 3.1.0
+info:
+  title: Mock Payment Gateway API
+  version: 1.0.0
+  description: |
+    模擬金流的 API，第一版只有付款。
+    行為說明見《設計_005_API規格》第 4 節與 ADR_012。
+
+    付款結果確定時，模擬金流會呼叫平台的回呼網址
+    `POST /api/v1/webhooks/payment-gateway`，格式見平台規格的 GatewayEvent。
+servers:
+  - url: http://localhost:8090
+security:
+  - apiKey: []
+
+paths:
+  /gateway/v1/payments:
+    post:
+      operationId: createPayment
+      summary: 付款
+      description: |
+        以 merchantReference 辨識重複請求：相同的 merchantReference 只會建立一筆交易，
+        重複送出時回傳既有交易的目前狀態，不會重複扣款。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
+      responses:
+        "200":
+          description: 交易的目前狀態；可能為成功、失敗或處理中
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /gateway/v1/payments/{merchantReference}:
+    get:
+      operationId: getPayment
+      summary: 依商家交易編號查詢交易結果
+      parameters:
+        - name: merchantReference
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /gateway/v1/admin/behavior:
+    get:
+      operationId: getBehavior
+      summary: 查詢目前的異常行為設定
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Behavior" }
+    put:
+      operationId: setBehavior
+      summary: 設定異常行為，供測試與壓測使用
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Behavior" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Behavior" }
+        "400": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+
+  responses:
+    Error:
+      description: 錯誤
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+    CreatePaymentRequest:
+      type: object
+      required: [merchantReference, amount, paymentToken]
+      properties:
+        merchantReference:
+          type: string
+          format: uuid
+          description: 平台的付款識別碼
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+        paymentToken:
+          type: string
+          enum: [tok_success, tok_fail, tok_async, tok_async_fail, tok_timeout]
+          description: 測試用付款代碼，決定這筆交易的行為
+    TransactionStatus:
+      type: string
+      enum: [PROCESSING, SUCCEEDED, FAILED]
+    Transaction:
+      type: object
+      required: [transactionId, merchantReference, amount, status, createdAt]
+      properties:
+        transactionId: { type: string, format: uuid }
+        merchantReference: { type: string, format: uuid }
+        amount: { type: integer, format: int64 }
+        status: { $ref: "#/components/schemas/TransactionStatus" }
+        failureReason: { type: string }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+    Behavior:
+      type: object
+      required: [latencyMillis, failureRatePercent, duplicateWebhookPercent, webhookDelayMillis]
+      properties:
+        latencyMillis:
+          type: integer
+          minimum: 0
+          maximum: 60000
+          description: 每個請求額外的延遲
+        failureRatePercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: tok_success 也隨機失敗的比例
+        duplicateWebhookPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 回呼重複送出的比例
+        webhookDelayMillis:
+          type: integer
+          minimum: 0
+          maximum: 600000
+          description: 回呼的延遲
