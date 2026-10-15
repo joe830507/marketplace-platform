@@ -2,21 +2,15 @@ package com.marketplace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.marketplace.testsupport.TestClockConfiguration;
-import com.marketplace.testsupport.TestcontainersConfiguration;
+import com.marketplace.testsupport.ApplicationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
 /** The application starts against a real database with all migrations applied. */
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import({TestcontainersConfiguration.class, TestClockConfiguration.class})
+@ApplicationTest
 class HealthApiIT {
 
   @Autowired MockMvcTester mvc;

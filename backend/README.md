@@ -56,6 +56,33 @@ docker compose -f ../infra/docker-compose.yml up -d --wait
 
 資料庫只在第一次建立時執行 `infra/postgres/init/` 的腳本。要重建本機資料庫時，以 `docker compose -f ../infra/docker-compose.yml down -v` 刪除資料後再啟動。
 
+### 第一個營運帳號
+
+資料庫中還沒有營運帳號時，應用程式啟動時會建立一個營運管理者帳號（《設計_005_API規格》3.4）。初始密碼不放在程式庫中，由環境變數提供：
+
+| 環境變數 | 內容 |
+|---|---|
+| `MARKETPLACE_AUTH_INITIAL_OPERATOR_USERNAME` | 帳號，預設 `admin` |
+| `MARKETPLACE_AUTH_INITIAL_OPERATOR_PASSWORD` | 初始密碼，8～100 個字元；沒有設定時不建立帳號，只記錄一筆警告 |
+
+```sh
+MARKETPLACE_AUTH_INITIAL_OPERATOR_PASSWORD='自行決定的密碼' ./mvnw -f spring-marketplace-app/pom.xml spring-boot:run
+```
+
+帳號建立後，這兩個設定不再有作用，之後啟動不需要再提供。以初始密碼登入後，除了認證 API 之外的呼叫都會回應 403 `PASSWORD_CHANGE_REQUIRED`，須先以 `POST /api/v1/ops/auth/password` 修改密碼。
+
+### 存取權杖的簽章金鑰
+
+存取權杖以 RSA 金鑰簽章（ADR_009）。本機沒有設定金鑰時，啟動時會產生一組暫時的金鑰並記錄一筆警告，重新啟動後已發出的存取權杖即失效。需要固定的金鑰時，以 PEM 檔設定：
+
+```yaml
+marketplace:
+  security:
+    jwt:
+      private-key: file:/path/to/private.pem   # PKCS#8
+      public-key: file:/path/to/public.pem     # X.509
+```
+
 ## OpenAPI 規格
 
 規格檔在各專案的 `src/main/resources/openapi/`。建置時產生 Java 介面與資料模型到 `target/generated-sources/openapi/`，控制器實作這些介面（ADR_011）。修改 API 時先改規格檔。

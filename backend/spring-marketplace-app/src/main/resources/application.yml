@@ -9,6 +9,9 @@ spring:
     url: jdbc:postgresql://localhost:5432/marketplace
     username: marketplace
     password: marketplace
+  jackson:
+    # Fields without a value are left out instead of sent as null (設計_005 2.2).
+    default-property-inclusion: non_null
   jpa:
     open-in-view: false
     hibernate:
@@ -28,7 +31,23 @@ server:
   port: 8080
 
 management:
+  tracing:
+    sampling:
+      # Every request gets a trace ID for logs, errors and audit records (需求 6). Revisit with the
+      # observability stage, when traces are exported.
+      probability: 1.0
   endpoints:
     web:
       exposure:
         include: health,info
+
+marketplace:
+  auth:
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+    max-failed-logins: 5
+    lock-duration: 15m
+    # initial-operator.username / password: the first operator administrator, created at startup
+    # while no operator exists. The password is given at deployment, never kept here (設計_005 3.4).
+  # security.jwt.private-key / public-key: PEM files of the signing key pair. Unset locally, so a
+  # key pair is generated at startup.

@@ -8,20 +8,43 @@ info:
 servers:
   - url: http://localhost:8080
 tags:
-  - name: public
-    description: 不需要登入
+  # 依「使用對象-模組」分組，每個 tag 產生一個 Java 介面，由該模組的控制器實作。
+  - name: public-rules
+    description: 規則告知用的設定值
+  - name: public-catalog
+    description: 商品與分類
+  - name: public-account
+    description: 條款
   - name: member-auth
     description: 會員認證
-  - name: member
-    description: 會員
+  - name: member-account
+    description: 會員的條款同意與收件資訊
+  - name: member-cart
+    description: 購物車
+  - name: member-ordering
+    description: 會員的結帳單
+  - name: member-payment
+    description: 會員的付款
   - name: seller-auth
     description: 賣家帳號認證
-  - name: seller
-    description: 賣家
+  - name: seller-account
+    description: 賣家條款
+  - name: seller-catalog
+    description: 賣家的商品
+  - name: seller-inventory
+    description: 賣家的庫存
+  - name: seller-ordering
+    description: 賣家的子訂單
   - name: ops-auth
     description: 營運帳號認證
-  - name: ops
-    description: 平台營運
+  - name: ops-account
+    description: 賣家、營運帳號與條款的管理
+  - name: ops-catalog
+    description: 分類的管理
+  - name: ops-settlement
+    description: 抽成比例
+  - name: ops-ordering
+    description: 結帳單查詢
   - name: webhook
     description: 模擬金流的回呼
 
@@ -29,7 +52,7 @@ paths:
   # ---------------------------------------------------------------- public
   /api/v1/public/rules:
     get:
-      tags: [public]
+      tags: [public-rules]
       operationId: getRules
       security: []
       summary: 規則告知用的設定值
@@ -42,7 +65,7 @@ paths:
 
   /api/v1/public/categories:
     get:
-      tags: [public]
+      tags: [public-catalog]
       operationId: listCategories
       security: []
       summary: 分類清單
@@ -57,7 +80,7 @@ paths:
 
   /api/v1/public/products:
     get:
-      tags: [public]
+      tags: [public-catalog]
       operationId: searchProducts
       security: []
       summary: 分類瀏覽與關鍵字搜尋
@@ -93,7 +116,7 @@ paths:
 
   /api/v1/public/products/{productId}:
     get:
-      tags: [public]
+      tags: [public-catalog]
       operationId: getProduct
       security: []
       summary: 商品頁
@@ -109,7 +132,7 @@ paths:
 
   /api/v1/public/terms/{documentType}/latest:
     get:
-      tags: [public]
+      tags: [public-account]
       operationId: getLatestTerms
       security: []
       summary: 最新版本的條款
@@ -205,7 +228,7 @@ paths:
   # ---------------------------------------------------------------- member
   /api/v1/member/terms-consents:
     post:
-      tags: [member]
+      tags: [member-account]
       operationId: consentMemberTerms
       summary: 同意新版本的條款
       security:
@@ -224,7 +247,7 @@ paths:
 
   /api/v1/member/shipping-addresses:
     get:
-      tags: [member]
+      tags: [member-account]
       operationId: listShippingAddresses
       summary: 收件資訊清單
       security:
@@ -240,7 +263,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     post:
-      tags: [member]
+      tags: [member-account]
       operationId: createShippingAddress
       summary: 新增收件資訊
       security:
@@ -267,7 +290,7 @@ paths:
         required: true
         schema: { type: string, format: uuid }
     put:
-      tags: [member]
+      tags: [member-account]
       operationId: updateShippingAddress
       summary: 修改收件資訊
       security:
@@ -287,7 +310,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
-      tags: [member]
+      tags: [member-account]
       operationId: deleteShippingAddress
       summary: 刪除收件資訊
       security:
@@ -300,7 +323,7 @@ paths:
 
   /api/v1/member/cart:
     get:
-      tags: [member]
+      tags: [member-cart]
       operationId: getCart
       summary: 購物車
       security:
@@ -318,7 +341,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ProductId"
     put:
-      tags: [member]
+      tags: [member-cart]
       operationId: putCartItem
       summary: 加入購物車或修改數量
       security:
@@ -339,7 +362,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
-      tags: [member]
+      tags: [member-cart]
       operationId: deleteCartItem
       summary: 從購物車移除
       security:
@@ -351,7 +374,7 @@ paths:
 
   /api/v1/member/checkouts:
     get:
-      tags: [member]
+      tags: [member-ordering]
       operationId: listMemberCheckouts
       summary: 我的訂單列表
       security:
@@ -374,7 +397,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     post:
-      tags: [member]
+      tags: [member-ordering]
       operationId: createCheckout
       summary: 結帳
       description: 結帳購物車中指定的商品，依賣家拆成子訂單並預扣庫存。
@@ -407,7 +430,7 @@ paths:
 
   /api/v1/member/checkouts/{checkoutId}:
     get:
-      tags: [member]
+      tags: [member-ordering]
       operationId: getMemberCheckout
       summary: 訂單詳情
       security:
@@ -425,7 +448,7 @@ paths:
 
   /api/v1/member/checkouts/{checkoutId}/cancel:
     post:
-      tags: [member]
+      tags: [member-ordering]
       operationId: cancelCheckout
       summary: 主動取消結帳單
       security:
@@ -444,7 +467,7 @@ paths:
 
   /api/v1/member/checkouts/{checkoutId}/payments:
     post:
-      tags: [member]
+      tags: [member-payment]
       operationId: createPayment
       summary: 發起付款
       security:
@@ -476,7 +499,7 @@ paths:
 
   /api/v1/member/checkouts/{checkoutId}/payments/latest:
     get:
-      tags: [member]
+      tags: [member-payment]
       operationId: getLatestPayment
       summary: 查詢最新一筆付款的結果
       security:
@@ -551,7 +574,7 @@ paths:
   # ---------------------------------------------------------------- seller
   /api/v1/seller/terms-consents:
     post:
-      tags: [seller]
+      tags: [seller-account]
       operationId: consentSellerTerms
       summary: 同意賣家條款（管理者）
       security:
@@ -570,7 +593,7 @@ paths:
 
   /api/v1/seller/products:
     get:
-      tags: [seller]
+      tags: [seller-catalog]
       operationId: listSellerProducts
       summary: 賣家的商品列表
       security:
@@ -593,7 +616,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     post:
-      tags: [seller]
+      tags: [seller-catalog]
       operationId: createSellerProduct
       summary: 新增商品（建立時為下架狀態）
       security:
@@ -617,7 +640,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ProductId"
     get:
-      tags: [seller]
+      tags: [seller-catalog]
       operationId: getSellerProduct
       summary: 商品詳情
       security:
@@ -631,7 +654,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
     put:
-      tags: [seller]
+      tags: [seller-catalog]
       operationId: updateSellerProduct
       summary: 修改商品
       security:
@@ -653,7 +676,7 @@ paths:
 
   /api/v1/seller/products/{productId}/list:
     post:
-      tags: [seller]
+      tags: [seller-catalog]
       operationId: listProduct
       summary: 上架
       security:
@@ -671,7 +694,7 @@ paths:
 
   /api/v1/seller/products/{productId}/unlist:
     post:
-      tags: [seller]
+      tags: [seller-catalog]
       operationId: unlistProduct
       summary: 下架
       security:
@@ -689,7 +712,7 @@ paths:
 
   /api/v1/seller/products/{productId}/stock:
     get:
-      tags: [seller]
+      tags: [seller-inventory]
       operationId: getStock
       summary: 庫存數字
       security:
@@ -707,7 +730,7 @@ paths:
 
   /api/v1/seller/products/{productId}/stock/movements:
     get:
-      tags: [seller]
+      tags: [seller-inventory]
       operationId: listStockMovements
       summary: 庫存異動紀錄
       description: 未指定日期區間時查詢最近 30 天，區間最長 1 年。
@@ -734,7 +757,7 @@ paths:
 
   /api/v1/seller/products/{productId}/stock/inbound:
     post:
-      tags: [seller]
+      tags: [seller-inventory]
       operationId: inboundStock
       summary: 入庫
       security:
@@ -758,7 +781,7 @@ paths:
 
   /api/v1/seller/products/{productId}/stock/adjustments:
     post:
-      tags: [seller]
+      tags: [seller-inventory]
       operationId: adjustStock
       summary: 調整庫存
       security:
@@ -783,7 +806,7 @@ paths:
 
   /api/v1/seller/orders:
     get:
-      tags: [seller]
+      tags: [seller-ordering]
       operationId: listSellerOrders
       summary: 子訂單列表
       description: 未指定日期區間時查詢最近 30 天，區間最長 1 年。
@@ -812,7 +835,7 @@ paths:
 
   /api/v1/seller/orders/{sellerOrderId}:
     get:
-      tags: [seller]
+      tags: [seller-ordering]
       operationId: getSellerOrder
       summary: 子訂單詳情
       security:
@@ -890,7 +913,7 @@ paths:
   # ---------------------------------------------------------------- ops
   /api/v1/ops/sellers:
     get:
-      tags: [ops]
+      tags: [ops-account]
       operationId: listSellers
       summary: 賣家列表
       security:
@@ -910,7 +933,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     post:
-      tags: [ops]
+      tags: [ops-account]
       operationId: createSeller
       summary: 建立賣家與其第一個管理者帳號（營運管理者）
       security:
@@ -933,7 +956,7 @@ paths:
 
   /api/v1/ops/sellers/{sellerId}:
     get:
-      tags: [ops]
+      tags: [ops-account]
       operationId: getSeller
       summary: 賣家詳情
       security:
@@ -952,7 +975,7 @@ paths:
 
   /api/v1/ops/sellers/{sellerId}/commission-rate:
     put:
-      tags: [ops]
+      tags: [ops-settlement]
       operationId: setCommissionRate
       summary: 設定抽成比例（營運管理者）
       security:
@@ -978,7 +1001,7 @@ paths:
 
   /api/v1/ops/categories:
     post:
-      tags: [ops]
+      tags: [ops-catalog]
       operationId: createCategory
       summary: 新增分類（營運管理者）
       security:
@@ -1000,7 +1023,7 @@ paths:
 
   /api/v1/ops/terms-documents:
     post:
-      tags: [ops]
+      tags: [ops-account]
       operationId: publishTermsDocument
       summary: 發布條款新版本（營運管理者）
       security:
@@ -1022,7 +1045,7 @@ paths:
 
   /api/v1/ops/operator-users:
     get:
-      tags: [ops]
+      tags: [ops-account]
       operationId: listOperatorUsers
       summary: 營運帳號列表（營運管理者）
       security:
@@ -1039,7 +1062,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     post:
-      tags: [ops]
+      tags: [ops-account]
       operationId: createOperatorUser
       summary: 新增營運帳號（營運管理者）
       security:
@@ -1062,7 +1085,7 @@ paths:
 
   /api/v1/ops/operator-users/{operatorUserId}/roles:
     put:
-      tags: [ops]
+      tags: [ops-account]
       operationId: setOperatorRoles
       summary: 設定營運帳號的角色（營運管理者）
       security:
@@ -1090,7 +1113,7 @@ paths:
 
   /api/v1/ops/checkouts:
     get:
-      tags: [ops]
+      tags: [ops-ordering]
       operationId: searchCheckouts
       summary: 以結帳單編號或會員查詢
       description: 依會員查詢時，未指定日期區間則查詢最近 30 天，區間最長 1 年。
@@ -1119,7 +1142,7 @@ paths:
 
   /api/v1/ops/checkouts/{checkoutId}:
     get:
-      tags: [ops]
+      tags: [ops-ordering]
       operationId: getOpsCheckout
       summary: 結帳單完整詳情
       security:

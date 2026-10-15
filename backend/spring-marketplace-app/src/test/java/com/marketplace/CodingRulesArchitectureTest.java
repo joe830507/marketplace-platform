@@ -23,7 +23,8 @@ import java.util.Set;
 class CodingRulesArchitectureTest {
 
   /** The one class allowed to read the system clock. */
-  private static final String CLOCK_PROVIDER = "com.marketplace.shared.internal.TimeConfiguration";
+  private static final String CLOCK_PROVIDER =
+      "com.marketplace.shared.internal.support.TimeConfiguration";
 
   private static final Set<String> FLOATING_POINT_TYPES =
       Set.of("double", "float", "java.lang.Double", "java.lang.Float");
