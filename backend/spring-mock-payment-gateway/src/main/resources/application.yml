@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: mock-payment-gateway
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # Local Docker Compose database (infra/docker-compose.yml), separate from the platform's.
+    url: jdbc:postgresql://localhost:5432/gateway
+    username: gateway
+    password: gateway
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    # The mock gateway has a single schema in its own database (設計_005 4.5); Flyway creates it.
+    default-schema: gateway
+
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

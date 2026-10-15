@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: marketplace
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # Local Docker Compose database (infra/docker-compose.yml).
+    url: jdbc:postgresql://localhost:5432/marketplace
+    username: marketplace
+    password: marketplace
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    # Flyway creates the shared schema for its history table; module schemas are created by V1.
+    default-schema: shared
+  modulith:
+    events:
+      jdbc:
+        schema: shared
+        schema-initialization:
+          enabled: false
+      republish-outstanding-events-on-restart: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

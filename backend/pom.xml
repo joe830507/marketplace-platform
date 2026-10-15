@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!--
+    Aggregator only: builds both services with one command. Each service has its own parent
+    (spring-boot-starter-parent) and can be built on its own, so they can be split later.
+  -->
+  <groupId>com.marketplace</groupId>
+  <artifactId>marketplace-backend</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <modules>
+    <module>spring-marketplace-app</module>
+    <module>spring-mock-payment-gateway</module>
+  </modules>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <!-- Lets "./mvnw spotless:apply" run from this directory; keep in step with the services. -->
+        <plugin>
+          <groupId>com.diffplug.spotless</groupId>
+          <artifactId>spotless-maven-plugin</artifactId>
+          <version>3.10.4</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+</project>
