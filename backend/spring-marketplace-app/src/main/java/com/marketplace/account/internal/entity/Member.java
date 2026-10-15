@@ -5,6 +5,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.util.Set;
+import java.util.UUID;
 
 /** A buyer's account. Members have no roles and can only access their own data (需求 3.13). */
 @Entity
@@ -16,6 +17,11 @@ public class Member extends LoginAccount {
 
   protected Member() {}
 
+  public Member(UUID id, String username, String passwordHash, String displayName) {
+    super(id, username, passwordHash);
+    this.displayName = displayName;
+  }
+
   @Override
   public AccountType accountType() {
     return AccountType.MEMBER;
@@ -24,5 +30,9 @@ public class Member extends LoginAccount {
   @Override
   public Set<String> roles() {
     return Set.of();
+  }
+
+  public String displayName() {
+    return displayName;
   }
 }

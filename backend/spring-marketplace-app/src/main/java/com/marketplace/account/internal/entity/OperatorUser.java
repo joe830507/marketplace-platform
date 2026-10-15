@@ -1,6 +1,8 @@
 package com.marketplace.account.internal.entity;
 
+import com.marketplace.account.OperatorRole;
 import com.marketplace.shared.AccountType;
+import com.marketplace.shared.Actor;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -12,8 +14,10 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /** A platform operator's account; it may hold several roles (需求 3.13). */
@@ -21,17 +25,10 @@ import java.util.stream.Collectors;
 @Table(schema = "account", name = "operator_user")
 public class OperatorUser extends LoginAccount {
 
-  enum Role {
-    ADMIN,
-    CAMPAIGN,
-    CUSTOMER_SERVICE,
-    FINANCE
-  }
-
   /** One row of {@code operator_user_role}; assignments are only added or removed. */
   @Embeddable
   record RoleAssignment(
-      @Enumerated(EnumType.STRING) @Column(nullable = false) Role role,
+      @Enumerated(EnumType.STRING) @Column(nullable = false) OperatorRole role,
       @Column(nullable = false) Instant createdAt,
       @Column(nullable = false) String createdBy) {}
 
@@ -48,6 +45,19 @@ public class OperatorUser extends LoginAccount {
 
   protected OperatorUser() {}
 
+  /** An account created by an administrator with an initial password, which must be changed. */
+  public OperatorUser(
+      UUID id,
+      String username,
+      String passwordHash,
+      Set<OperatorRole> roles,
+      Instant now,
+      Actor actor) {
+    super(id, username, passwordHash);
+    this.mustChangePassword = true;
+    assignRoles(roles, now, actor);
+  }
+
   @Override
   public AccountType accountType() {
     return AccountType.OPERATOR;
@@ -58,6 +68,26 @@ public class OperatorUser extends LoginAccount {
     return roleAssignments.stream()
         .map(assignment -> assignment.role().name())
         .collect(Collectors.toUnmodifiableSet());
+  }
+
+  public Set<OperatorRole> roleSet() {
+    Set<OperatorRole> roles = EnumSet.noneOf(OperatorRole.class);
+    roleAssignments.forEach(assignment -> roles.add(assignment.role()));
+    return roles;
+  }
+
+  /**
+   * Replaces the roles. Roles the account keeps keep their original assignment; removed roles are
+   * deleted (設計_004 2.4).
+   */
+  public void assignRoles(Set<OperatorRole> roles, Instant now, Actor actor) {
+    roleAssignments.removeIf(assignment -> !roles.contains(assignment.role()));
+    Set<OperatorRole> current = roleSet();
+    for (OperatorRole role : roles) {
+      if (!current.contains(role)) {
+        roleAssignments.add(new RoleAssignment(role, now, actor.value()));
+      }
+    }
   }
 
   @Override

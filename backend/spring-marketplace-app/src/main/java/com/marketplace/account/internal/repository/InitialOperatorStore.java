@@ -6,13 +6,13 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
 /**
  * Creates the first operator administrator with SQL, so the audit columns name the system instead
  * of the request's actor, and several instances starting at once create only one account.
  */
-@Repository
+@Component
 public class InitialOperatorStore {
 
   private final JdbcClient jdbc;

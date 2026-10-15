@@ -1043,6 +1043,55 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /api/v1/ops/terms-documents/{termsDocumentId}:
+    get:
+      tags: [ops-account]
+      operationId: getTermsDocument
+      summary: 任一版本的條款內容
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: termsDocumentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TermsDocument" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/ops/terms-consents:
+    get:
+      tags: [ops-account]
+      operationId: listTermsConsents
+      summary: 會員或賣家同意過的條款
+      description: memberId 與 sellerId 須指定其中一個。依同意時間由新到舊排列。
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: memberId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: sellerId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TermsConsentRecord" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /api/v1/ops/operator-users:
     get:
       tags: [ops-account]
@@ -1423,6 +1472,25 @@ components:
       required: [termsDocumentId]
       properties:
         termsDocumentId: { type: string, format: uuid }
+    TermsConsentRecord:
+      type: object
+      required: [termsDocumentId, documentType, version, accountType, accountId, consentedAt]
+      properties:
+        termsDocumentId: { type: string, format: uuid }
+        documentType: { $ref: "#/components/schemas/TermsDocumentType" }
+        version: { type: integer }
+        accountType:
+          type: string
+          enum: [MEMBER, SELLER_USER]
+        accountId:
+          type: string
+          format: uuid
+          description: 同意的帳號；賣家條款為代表賣家同意的管理者帳號
+        sellerId:
+          type: string
+          format: uuid
+          description: 只在賣家條款出現
+        consentedAt: { type: string, format: date-time }
     PublishTermsRequest:
       type: object
       required: [documentType, content]

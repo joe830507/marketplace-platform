@@ -81,6 +81,36 @@ public class AuthTestClient {
         .exchange();
   }
 
+  public MvcTestResult post(String path, String accessToken, String json) {
+    return mvc.post()
+        .uri(path)
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(json)
+        .exchange();
+  }
+
+  public MvcTestResult put(String path, String accessToken, String json) {
+    return mvc.put()
+        .uri(path)
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(json)
+        .exchange();
+  }
+
+  public MvcTestResult delete(String path, String accessToken) {
+    return mvc.delete()
+        .uri(path)
+        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+        .exchange();
+  }
+
+  /** The access token of a new account of the type, ready to use. */
+  public String accessToken(TestAccount account) {
+    return loginOk(account).accessToken();
+  }
+
   /**
    * Checks whether an access token is accepted, using the only protected API that exists for every
    * account type: changing the password with a wrong current password answers {@code

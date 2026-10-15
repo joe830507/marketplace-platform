@@ -32,6 +32,7 @@ import org.springframework.context.annotation.Import;
   TestcontainersConfiguration.class,
   TestClockConfiguration.class,
   AccountFixtures.class,
-  AuthTestClient.class
+  AuthTestClient.class,
+  TermsFixtures.class
 })
 public @interface ApplicationTest {}

@@ -1,5 +1,6 @@
 package com.marketplace.account.internal.entity;
 
+import com.marketplace.account.SellerRole;
 import com.marketplace.shared.AccountType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,22 +15,25 @@ import java.util.UUID;
 @Table(schema = "account", name = "seller_user")
 public class SellerUser extends LoginAccount {
 
-  enum Role {
-    ADMIN,
-    MEMBER
-  }
-
   @Column(nullable = false)
   private UUID sellerId;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
-  private Role role;
+  private SellerRole role;
 
   @Column(nullable = false)
   private boolean mustChangePassword;
 
   protected SellerUser() {}
+
+  /** An account created by someone else with an initial password, which must be changed. */
+  public SellerUser(UUID id, UUID sellerId, String username, String passwordHash, SellerRole role) {
+    super(id, username, passwordHash);
+    this.sellerId = sellerId;
+    this.role = role;
+    this.mustChangePassword = true;
+  }
 
   @Override
   public AccountType accountType() {
@@ -39,6 +43,10 @@ public class SellerUser extends LoginAccount {
   @Override
   public Set<String> roles() {
     return Set.of(role.name());
+  }
+
+  public SellerRole role() {
+    return role;
   }
 
   @Override

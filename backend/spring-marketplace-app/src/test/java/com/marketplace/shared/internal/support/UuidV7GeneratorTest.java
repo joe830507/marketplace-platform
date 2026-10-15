@@ -6,7 +6,9 @@ import com.marketplace.testsupport.MutableClock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -37,8 +39,11 @@ class UuidV7GeneratorTest {
   }
 
   @Test
-  @DisplayName("同一毫秒內產生的識別碼不重複")
-  void idsInTheSameMillisecondDiffer() {
-    assertThat(generator.newId()).isNotEqualTo(generator.newId());
+  @DisplayName("同一毫秒內產生的識別碼依產生順序遞增")
+  void idsInTheSameMillisecondIncrease() {
+    List<UUID> ids = Stream.generate(generator::newId).limit(5_000).toList();
+
+    assertThat(ids).doesNotHaveDuplicates();
+    assertThat(ids.stream().map(UUID::toString).toList()).isSorted();
   }
 }

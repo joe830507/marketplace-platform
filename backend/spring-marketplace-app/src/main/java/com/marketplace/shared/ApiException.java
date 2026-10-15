@@ -1,5 +1,6 @@
 package com.marketplace.shared;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,6 +26,14 @@ public class ApiException extends RuntimeException {
     super(detail);
     this.code = code;
     this.properties = Map.copyOf(properties);
+  }
+
+  /** A {@code VALIDATION_FAILED} error for one field, in the same shape as bean validation. */
+  public static ApiException invalidField(String field, String message) {
+    return new ApiException(
+        ErrorCode.VALIDATION_FAILED,
+        message,
+        Map.of("errors", List.of(Map.of("field", field, "message", message))));
   }
 
   public ErrorCode code() {

@@ -5,6 +5,7 @@ import com.marketplace.shared.IdGenerator;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -14,7 +15,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * Creates accounts for tests directly in the database, each with a new ID and a unique username
- * (設計_006 4.2), until the account management API exists.
+ * (設計_006 4.2).
+ *
+ * <p>Members and sellers accept the latest terms when they are created, as registration does, so
+ * that tests of other features are not stopped by the terms gate (需求 3.12).
  */
 @TestComponent
 public class AccountFixtures {
@@ -57,23 +61,36 @@ public class AccountFixtures {
         .param("passwordHash", passwordHash)
         .param("now", now())
         .update();
-    return new TestAccount(AccountType.MEMBER, id, username, PASSWORD, null);
+    TestAccount member = new TestAccount(AccountType.MEMBER, id, username, PASSWORD, null);
+    acceptLatestTerms(member);
+    return member;
   }
 
   /** A seller account of a new active seller. */
   public TestAccount sellerUser(String role, boolean mustChangePassword) {
+    UUID sellerId = seller("THIRD_PARTY");
+    return sellerUserOf(sellerId, role, mustChangePassword);
+  }
+
+  /** A new active seller without accounts. */
+  public UUID seller(String sellerType) {
     UUID sellerId = ids.newId();
     jdbc.sql(
             """
             INSERT INTO account.seller (id, name, seller_type, status,
               created_at, created_by, updated_at, updated_by, version)
-            VALUES (:id, :name, 'THIRD_PARTY', 'ACTIVE', :now, 'TEST', :now, 'TEST', 0)
+            VALUES (:id, :name, :sellerType, 'ACTIVE', :now, 'TEST', :now, 'TEST', 0)
             """)
         .param("id", sellerId)
         .param("name", "Seller " + sellerId)
+        .param("sellerType", sellerType)
         .param("now", now())
         .update();
+    return sellerId;
+  }
 
+  /** An account of an existing seller; it accepts the latest seller terms for the seller. */
+  public TestAccount sellerUserOf(UUID sellerId, String role, boolean mustChangePassword) {
     UUID id = ids.newId();
     String username = uniqueUsername("seller");
     jdbc.sql(
@@ -91,7 +108,10 @@ public class AccountFixtures {
         .param("mustChangePassword", mustChangePassword)
         .param("now", now())
         .update();
-    return new TestAccount(AccountType.SELLER_USER, id, username, PASSWORD, sellerId);
+    TestAccount sellerUser =
+        new TestAccount(AccountType.SELLER_USER, id, username, PASSWORD, sellerId);
+    acceptLatestTerms(sellerUser);
+    return sellerUser;
   }
 
   public TestAccount operator(Set<String> roles, boolean mustChangePassword) {
@@ -131,6 +151,45 @@ public class AccountFixtures {
       case SELLER_USER -> sellerUser("ADMIN", false);
       case OPERATOR -> operator(Set.of("ADMIN"), false);
     };
+  }
+
+  /**
+   * Accepts the latest versions of the terms the account needs: the member documents for a member,
+   * the seller terms on behalf of the seller for a seller account.
+   */
+  public void acceptLatestTerms(TestAccount account) {
+    List<String> types =
+        switch (account.type()) {
+          case MEMBER -> List.of("TERMS_OF_SERVICE", "PRIVACY_POLICY");
+          case SELLER_USER -> List.of("SELLER_TERMS");
+          case OPERATOR -> List.of();
+        };
+    for (String type : types) {
+      jdbc.sql(
+              """
+              SELECT id FROM account.terms_document WHERE document_type = :type
+              ORDER BY version DESC LIMIT 1
+              """)
+          .param("type", type)
+          .query(UUID.class)
+          .optional()
+          .ifPresent(
+              documentId ->
+                  jdbc.sql(
+                          """
+                          INSERT INTO account.terms_consent (id, account_type, account_id,
+                            seller_id, terms_document_id, consented_at)
+                          VALUES (:id, :accountType, :accountId, :sellerId, :documentId, :now)
+                          ON CONFLICT DO NOTHING
+                          """)
+                      .param("id", ids.newId())
+                      .param("accountType", account.type().name())
+                      .param("accountId", account.id())
+                      .param("sellerId", account.sellerId())
+                      .param("documentId", documentId)
+                      .param("now", now())
+                      .update());
+    }
   }
 
   public void disable(TestAccount account) {

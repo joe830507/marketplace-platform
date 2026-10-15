@@ -42,6 +42,14 @@ public abstract class LoginAccount extends AuditableEntity {
 
   protected LoginAccount() {}
 
+  /** A new active account that has never failed a login. */
+  protected LoginAccount(UUID id, String username, String passwordHash) {
+    this.id = id;
+    this.username = username;
+    this.passwordHash = passwordHash;
+    this.status = AccountStatus.ACTIVE;
+  }
+
   public abstract AccountType accountType();
 
   /** Role names as they appear in the access token; empty for members. */
@@ -70,6 +78,10 @@ public abstract class LoginAccount extends AuditableEntity {
 
   public String passwordHash() {
     return passwordHash;
+  }
+
+  public AccountStatus status() {
+    return status;
   }
 
   public boolean isActive() {

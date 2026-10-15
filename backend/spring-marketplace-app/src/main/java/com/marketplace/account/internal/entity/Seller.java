@@ -1,5 +1,6 @@
 package com.marketplace.account.internal.entity;
 
+import com.marketplace.account.SellerType;
 import com.marketplace.shared.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,11 +15,6 @@ import java.util.UUID;
 @Table(schema = "account", name = "seller")
 public class Seller extends AuditableEntity {
 
-  enum Type {
-    FIRST_PARTY,
-    THIRD_PARTY
-  }
-
   @Id private UUID id;
 
   @Column(nullable = false)
@@ -26,13 +22,36 @@ public class Seller extends AuditableEntity {
 
   @Enumerated(EnumType.STRING)
   @Column(name = "seller_type", nullable = false)
-  private Type type;
+  private SellerType type;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private AccountStatus status;
 
   protected Seller() {}
+
+  public Seller(UUID id, String name, SellerType type) {
+    this.id = id;
+    this.name = name;
+    this.type = type;
+    this.status = AccountStatus.ACTIVE;
+  }
+
+  public UUID id() {
+    return id;
+  }
+
+  public String name() {
+    return name;
+  }
+
+  public SellerType type() {
+    return type;
+  }
+
+  public AccountStatus status() {
+    return status;
+  }
 
   public boolean isActive() {
     return status == AccountStatus.ACTIVE;

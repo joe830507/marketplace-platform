@@ -2,11 +2,14 @@ package com.marketplace.shared.internal.security;
 
 import static org.springframework.http.HttpMethod.POST;
 
+import com.marketplace.shared.AccountGate;
 import com.marketplace.shared.AccountType;
 import com.marketplace.shared.internal.web.Problems;
 import jakarta.servlet.DispatcherType;
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -18,9 +21,11 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
  * Who may call which path (設計_005 2.1).
  *
  * <p>Each prefix accepts only access tokens of its own account type, so a member's token cannot
- * call seller APIs. Role checks inside a prefix belong to the module that owns the API.
+ * call seller APIs. Role checks inside a prefix belong to the module that owns the API: its
+ * controllers declare them with {@code PreAuthorize}.
  */
 @Configuration(proxyBeanMethods = false)
+@EnableMethodSecurity
 public class SecurityConfiguration {
 
   @Bean
@@ -28,7 +33,8 @@ public class SecurityConfiguration {
       HttpSecurity http,
       JwtDecoder jwtDecoder,
       SecurityProblemHandler problemHandler,
-      Problems problems)
+      Problems problems,
+      List<AccountGate> gates)
       throws Exception {
     http.csrf(AbstractHttpConfigurer::disable)
         .formLogin(AbstractHttpConfigurer::disable)
@@ -74,7 +80,7 @@ public class SecurityConfiguration {
                 exceptions
                     .authenticationEntryPoint(problemHandler)
                     .accessDeniedHandler(problemHandler))
-        .addFilterAfter(new PasswordChangeRequiredFilter(problems), AuthorizationFilter.class);
+        .addFilterAfter(new AccountGateFilter(problems, gates), AuthorizationFilter.class);
     return http.build();
   }
 }
